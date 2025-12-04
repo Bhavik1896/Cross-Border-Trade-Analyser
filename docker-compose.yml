@@ -1,0 +1,65 @@
+version: '3.8'
+services:
+  # ----------------------------------------
+  # 1. KAFKA & ZOOKEEPER (Messaging System)
+  # ----------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    platform: linux/amd64 # Runs stable on M1 via Rosetta
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    platform: linux/amd64 # Runs stable on M1 via Rosetta
+    depends_on: [zookeeper]
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Listen on port 29092 for internal docker, 9092 for your Mac
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # ----------------------------------------
+  # 2. AIRFLOW (Scheduler)
+  # ----------------------------------------
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    ports: ["8080:8080"]
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./gdelt_data:/opt/airflow/gdelt_data
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    # Install kafka-python automatically when Airflow starts
+    command: bash -c "pip install kafka-python requests pandas && airflow webserver"
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./gdelt_data:/opt/airflow/gdelt_data
+    depends_on: [airflow-webserver]
+    # Install kafka-python automatically when Scheduler starts
+    command: bash -c "pip install kafka-python requests pandas && airflow scheduler"
+
+  # ----------------------------------------
+  # 3. YOUR FLINK ML CONTAINER (The Brain)
+  # ----------------------------------------
+  flink-ml-engine:
+    image: final-project-env:v1
+    depends_on: [kafka]
+    volumes:
+      - ./:/opt/project
+    # ADD THIS SECTION:
+    ports:
+      - "8888:8888"
+    command: tail -f /dev/null

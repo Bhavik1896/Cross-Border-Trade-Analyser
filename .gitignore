@@ -1,0 +1,9 @@
+gdelt_data/
+*.json
+*.xls;xlsx;csv
+
+.DS_Store
+
+.idea/
+
+.ipynb_checkpoints/
