@@ -1,29 +1,39 @@
-# 1. Use Official Flink (It automatically detects M1 and pulls the ARM64 version)
+# 1. Start fresh from the Official Flink Image
 FROM flink:1.20-java11
 
-# 2. Switch to root
+# Switch to root
 USER root
 
-# 3. Install System Dependencies (Crucial for M1 Macs)
+# 2. INSTALL SYSTEM TOOLS & JDK
+# We explicitly install 'openjdk-11-jdk' to get the missing headers for pemja/PyFlink
 RUN apt-get update -y && \
-    apt-get install -y \
+    apt-get install -y --no-install-recommends \
+    openjdk-11-jdk \
     python3 \
     python3-pip \
     python3-dev \
     build-essential \
     libssl-dev \
     libffi-dev \
-    && ln -s /usr/bin/python3 /usr/bin/python
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# 4. Upgrade Pip
-RUN python3 -m pip install --upgrade pip
+# 3. LINK PYTHON
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# 5. Install Python Libraries
-# We ignore installed packages to prevent conflicts with Flink's pre-installed libs
+# 4. SET JAVA_HOME CORRECTLY
+# The base image points to /opt/java/openjdk, which is broken for building.
+# We point to the apt-installed JDK which contains the 'include' folder.
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
+
+# 5. UPGRADE PIP & SETUPTOOLS
+RUN pip3 install --upgrade pip setuptools wheel --ignore-installed
+
+# 6. INSTALL LIBRARIES
 RUN pip3 install --no-cache-dir --ignore-installed \
+    apache-flink==1.20.0 \
     notebook \
-    jupyter \
-    ipykernel \
     pandas \
     polars \
     pyarrow \
@@ -37,8 +47,8 @@ RUN pip3 install --no-cache-dir --ignore-installed \
     joblib \
     "numpy<2.0"
 
-# 6. Download Spacy Model
+# 7. Download Spacy Model
 RUN python3 -m spacy download en_core_web_sm
 
-# 7. Set Working Directory
+# 8. Set working directory
 WORKDIR /opt/project
