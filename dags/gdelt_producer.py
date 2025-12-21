@@ -118,9 +118,9 @@ default_args = {
 }
 
 with DAG(
-        'gdelt_15min_ingestion',
+        'gdelt_ingestion_15_min',
         default_args=default_args,
-        description='Fetch & Clean GDELT every 15 mins',
+        description='Fetch & Clean GDELT Data every 15 mins',
         schedule_interval='*/15 * * * *',  # Runs every 15 mins
         catchup=False,
 ) as dag:

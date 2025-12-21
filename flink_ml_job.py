@@ -16,7 +16,7 @@ def run_basic_job():
 
     # 1. Setup Environment
     env = StreamExecutionEnvironment.get_execution_environment()
-    env.set_parallelism(1)
+    env.set_parallelism(2)
 
     # Load the Kafka Connector JAR
     env.add_jars(KAFKA_JAR_PATH)
@@ -25,7 +25,7 @@ def run_basic_job():
     source = KafkaSource.builder() \
         .set_bootstrap_servers(KAFKA_BROKERS) \
         .set_topics(TOPIC_NAME) \
-        .set_group_id("basic-flink-group") \
+        .set_group_id("basic-flink-ml_job") \
         .set_starting_offsets(KafkaOffsetsInitializer.latest()) \
         .set_value_only_deserializer(SimpleStringSchema()) \
         .build()

@@ -1,50 +1,112 @@
-version: '3'
 services:
-  # --- KAFKA & ZOOKEEPER (Standard) ---
+  # --- 1. KAFKA & ZOOKEEPER ---
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
+    platform: linux/amd64
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
-    depends_on: [zookeeper]
-    ports: ["9092:9092"]
+    platform: linux/amd64
+    depends_on:
+      - zookeeper
+    ports:
+      # Map the correct listener port (29092) to the host machine for Flink to use
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      # Force Kafka to bind and advertise only on 29092 for the internal Docker network.
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  # --- AIRFLOW (Merged into One Container) ---
-  airflow:
+  # --- 2. TIMESCALEDB ---
+  db: # <-- Corrected indentation
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: gdelt_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    healthcheck: # <-- Corrected indentation
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- 3. FLINK JOBMANAGER ---
+  jobmanager: # <-- Corrected indentation
+    image: final-project-env:v1 # Using the fixed image version for JobManager
+    hostname: jobmanager
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./flink-jobs:/opt/flink/jobs
+#      - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+    environment:
+        - JOB_MANAGER_RPC_ADDRESS=jobmanager
+        - TASKMANAGER_NUMBEROFTASKSLOTS=4
+        - PARALLELISM_DEFAULT=4
+    command: ["/opt/flink/bin/jobmanager.sh", "start-foreground"]
+
+  # --- 4. FLINK TASKMANAGER (with Pipeline) ---
+  taskmanager: # <-- Corrected indentation
+    image: final-project-env:v1 # Using the fixed image version for TaskManager
+    depends_on:
+      - jobmanager
+    volumes:
+      - ./flink-jobs:/opt/flink/jobs
+    environment:
+        - JOB_MANAGER_RPC_ADDRESS=jobmanager
+        - TASKMANAGER_NUMBEROFTASKSLOTS=4
+        - PARALLELISM_DEFAULT=4
+    command: [ "/opt/flink/bin/taskmanager.sh", "start-foreground" ]
+
+
+
+
+  # --- 5. AIRFLOW ---
+  airflow: # <-- Corrected indentation
     image: apache/airflow:2.7.1
-    ports: ["8080:8080"]
+    container_name: finalyearproject-airflow-1
+    ports:
+      - "8080:8080"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./gdelt_data:/opt/airflow/gdelt_data
     environment:
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-    # This command does EVERYTHING in one place:
-    # 1. Installs libraries
-    # 2. Initializes DB
-    # 3. Creates Admin User
-    # 4. Starts Scheduler AND Webserver in background
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:password@db:5432/gdelt_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    depends_on:
+      db:
+        condition: service_healthy
     command: >
-      bash -c "pip install requests kafka-python &&
-      airflow db init &&
-      airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true &&
-      (airflow scheduler & airflow webserver)"
+      bash -c "
+      pip install --no-cache-dir requests kafka-python psycopg2-binary &&
+      airflow standalone
+      "
+  
 
-  # --- FLINK ML ENGINE (Your Custom Image) ---
-  flink-ml-engine:
-    build: .
-    image: final-project-env:v1
-    container_name: flink_dev_runner
-    depends_on: [kafka]
+  # --- 6. FLASK API ---
+  flask_api: # <-- Corrected indentation
+    image: final-project-env:v1 # Using the fixed image version for Flask
+    ports:
+      - "5001:5000"
     volumes:
       - ./:/opt/project
-    command: tail -f /dev/null
+    depends_on:
+      - db
+    command: python /opt/project/app.py
+
+volumes: # <-- Corrected indentation (top-level key)
+  timescale_data:
+
