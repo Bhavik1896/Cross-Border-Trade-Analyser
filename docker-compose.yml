@@ -1,17 +1,24 @@
 services:
-  # --- 1. KAFKA & ZOOKEEPER ---
+  # =========================
+  # 1. ZOOKEEPER
+  # =========================
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
     platform: linux/amd64
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+
+  # =========================
+  # 2. KAFKA
+  # =========================
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
     platform: linux/amd64
     depends_on:
-      - zookeeper
+     - zookeeper
     ports:
       # Map the correct listener port (29092) to the host machine for Flink to use
       - "29092:29092"
@@ -25,8 +32,24 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  # --- 2. TIMESCALEDB ---
-  db: # <-- Corrected indentation
+ # =========================
+ # KAFKA TOPIC INIT SERVICE
+ # =========================
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      kafka:
+        condition: service_started
+    volumes:
+      - ./shell_script_jobs/create-topics.sh:/tmp/create-topics.sh # Map the script
+    entrypoint: [ "sh", "/tmp/create-topics.sh" ] # Run the script on startup
+
+  # =========================
+  # 2. TIMESCALEDB
+  # =========================
+
+  db: 
     image: timescale/timescaledb:latest-pg15
     environment:
       POSTGRES_USER: user
@@ -36,45 +59,48 @@ services:
       - "5432:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
-    healthcheck: # <-- Corrected indentation
+    healthcheck: 
       test: ["CMD-SHELL", "pg_isready -U user"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # --- 3. FLINK JOBMANAGER ---
-  jobmanager: # <-- Corrected indentation
-    image: final-project-env:v1 # Using the fixed image version for JobManager
+ # =========================
+ # FLINK JOBMANAGER
+ # =========================
+
+  jobmanager: 
+    image: finalyearproject
     hostname: jobmanager
     ports:
       - "8081:8081"
     volumes:
       - ./flink-jobs:/opt/flink/jobs
-#      - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+      - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
     environment:
         - JOB_MANAGER_RPC_ADDRESS=jobmanager
-        - TASKMANAGER_NUMBEROFTASKSLOTS=4
-        - PARALLELISM_DEFAULT=4
     command: ["/opt/flink/bin/jobmanager.sh", "start-foreground"]
 
-  # --- 4. FLINK TASKMANAGER (with Pipeline) ---
-  taskmanager: # <-- Corrected indentation
-    image: final-project-env:v1 # Using the fixed image version for TaskManager
+ # =========================
+ # FLINK TASKMANAGER
+ # =========================
+
+  taskmanager: 
+    image: finalyearproject
     depends_on:
       - jobmanager
     volumes:
       - ./flink-jobs:/opt/flink/jobs
+      - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
     environment:
         - JOB_MANAGER_RPC_ADDRESS=jobmanager
-        - TASKMANAGER_NUMBEROFTASKSLOTS=4
-        - PARALLELISM_DEFAULT=4
     command: [ "/opt/flink/bin/taskmanager.sh", "start-foreground" ]
 
+ # =========================
+ # AIRFLOW (The Producer)
+ # =========================
 
-
-
-  # --- 5. AIRFLOW ---
-  airflow: # <-- Corrected indentation
+  airflow: 
     image: apache/airflow:2.7.1
     container_name: finalyearproject-airflow-1
     ports:
@@ -94,11 +120,12 @@ services:
       pip install --no-cache-dir requests kafka-python psycopg2-binary &&
       airflow standalone
       "
-  
+ # =========================
+ # --- 6. FLASK API ---
+ # =========================
 
-  # --- 6. FLASK API ---
-  flask_api: # <-- Corrected indentation
-    image: final-project-env:v1 # Using the fixed image version for Flask
+  flask_api:
+    image: finalyearproject
     ports:
       - "5001:5000"
     volumes:
@@ -107,6 +134,5 @@ services:
       - db
     command: python /opt/project/app.py
 
-volumes: # <-- Corrected indentation (top-level key)
+volumes:
   timescale_data:
-
