@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from kafka import KafkaProducer
+from airflow.operators.bash import BashOperator
 
 # --- CONFIGURATION ---
 KAFKA_TOPIC = "gdelt-live"
@@ -128,3 +129,4 @@ with DAG(
         task_id='fetch_clean_push',
         python_callable=fetch_gdelt_and_push_to_kafka,
     )
+

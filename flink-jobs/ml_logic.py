@@ -5,6 +5,7 @@ import spacy
 import torch
 import pycountry
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from datetime import datetime, timedelta
 
 # --- FIX: IMPORT NECESSARY FUNCTIONS & SCHEMAS FROM DB_LOGIC ---
 from db_logic import save_and_get_trends, update_final_score, Base, engine, NewsEvent
@@ -40,6 +41,33 @@ SECTOR_GROUPS = {
     "Public Sector": ["POL", "GOV", "STATE", "PUBLIC", "LAW", "ELECTION"],
     "Infrastructure": ["ROAD", "RAIL", "URBAN", "INFRA", "BUILDING", "CONSTRUCTION"],
 }
+COUNTRY_ALIAS_MAP = {
+    "US": "United States",
+    "U.S.": "United States",
+    "USA": "United States",
+    "UNITED STATES": "United States",
+    "WASHINGTON": "United States",
+    "WALL STREET": "United States",
+    "FEDERAL RESERVE": "United States",
+    "FED": "United States",
+
+    "INDIA": "India",
+    "NEW DELHI": "India",
+    "DELHI": "India",
+    "MODI": "India",
+    "GOVERNMENT OF INDIA": "India",
+
+    "CHINA": "China",
+    "CHINESE": "China",
+    "BEIJING": "China",
+
+    "EU": "European Union",
+    "EUROPEAN UNION": "European Union",
+    "BRUSSELS": "European Union",
+}
+
+
+
 DEMONYM_MAPPER = {
     "Russian": "Russia", "Indian": "India", "American": "United States", "Chinese": "China",
     "Japanese": "Japan", "French": "France", "German": "Germany", "British": "United Kingdom"
@@ -60,17 +88,34 @@ def extract_sectors_multi(text):
 
 
 def extract_countries_multi(text):
-    doc = nlp(text)
+    text_upper = text.upper()
     found = set()
+
+    # ️FIRST: Alias-based detection (very important)
+    for alias, country_name in COUNTRY_ALIAS_MAP.items():
+        # Word-boundary to avoid false matches (e.g. "us" vs "US")
+        if re.search(rf"\b{re.escape(alias)}\b", text_upper):
+            try:
+                found.add(pycountry.countries.lookup(country_name).alpha_2)
+            except:
+                # EU or non-standard entities
+                if country_name == "European Union":
+                    found.add("EU")
+
+    # ️SECOND: SpaCy NER + demonyms
+    doc = nlp(text)
     for ent in doc.ents:
         if ent.label_ in ["GPE", "NORP"]:
             txt = ent.text.strip()
-            if txt in DEMONYM_MAPPER: txt = DEMONYM_MAPPER[txt]
+            if txt in DEMONYM_MAPPER:
+                txt = DEMONYM_MAPPER[txt]
             try:
                 found.add(pycountry.countries.lookup(txt).alpha_2)
             except:
                 continue
+
     return list(found) if found else ["OTHER"]
+
 
 
 def estimate_tone_fast(text):
@@ -92,8 +137,9 @@ def adjust_sentiment_rules(text, tone):
 # 4. CORE EXECUTION FUNCTION (Stateful Pipeline)
 # ==========================================
 def get_india_business_verdict(text):
-    print(f"\n📰 NEWS: {text}")
-    print("=" * 60)
+    from datetime import datetime, timedelta
+    final_results = []
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     # 1. Extract Info
     sectors = extract_sectors_multi(text)
@@ -102,20 +148,30 @@ def get_india_business_verdict(text):
 
     # 2. Check Context (Simplified)
     if "IN" not in countries:
-        print("ℹ️  NOTE: This news does not explicitly mention India.")
-        return
+        print("NOTE: This news does not explicitly mention India.")
 
     # Determine Partner
     partners = [c for c in countries if c != "IN"]
     target_country = partners[0] if partners else "IN"
-    partner_name = pycountry.countries.get(alpha_2=partners[0]).name.upper() if partners else "DOMESTIC MARKET"
+
+    partner_name = "DOMESTIC MARKET"
+    if partners:
+        country_obj = pycountry.countries.get(alpha_2=partners[0])
+        if country_obj is not None:
+            partner_name = country_obj.name.upper()
+        else:
+            partner_name = partners[0]  # fallback to raw code
 
     # 3. Process Logic
+    if not sectors:
+        sectors = ["Misc"]
+
     for sector in sectors:
         if sector == "Misc": continue
 
         # --- STATEFUL STEP: Save to DB & Get Real Trends ---
         # This is where the magic happens: Trend is calculated from TimescaleDB history
+        print("DEBUG: Writing record to TimescaleDB")
         tone_7d, tone_30d, real_trend = save_and_get_trends(target_country, sector, adj_tone, text)
 
         # --- PREPARE INPUT FOR XGBOOST ---
@@ -145,3 +201,15 @@ def get_india_business_verdict(text):
         print(f"   (Trend: {real_trend:.4f} based on 30-day history)")
         print(f"   {action}")
         print("-" * 60)
+
+        final_results.append((
+            current_time,
+            text,
+            verdict,
+            score,
+            sector,
+            target_country,
+            partner_name
+        ))
+
+    return final_results  # Return a list of tuples for the sink

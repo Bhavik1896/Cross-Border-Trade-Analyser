@@ -80,9 +80,18 @@ EOF
 ADD https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/3.3.0-1.20/flink-connector-kafka-3.3.0-1.20.jar \
     /opt/flink/lib/
 
-# 2. Required Kafka Client dependency (Fixes java.lang.NoClassDefFoundError for OffsetResetStrategy)
+# 2. Kafka Client dependency (Fixes java.lang.NoClassDefFoundError for OffsetResetStrategy)
 ADD https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.3.0/kafka-clients-3.3.0.jar \
     /opt/flink/lib/
+
+# 3. Flink JDBC Connector
+ADD https://repo1.maven.org/maven2/org/apache/flink/flink-connector-jdbc/3.3.0-1.20/flink-connector-jdbc-3.3.0-1.20.jar \
+    /opt/flink/lib/
+
+# 4. PostgreSQL JDBC Driver
+ADD https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar \
+    /opt/flink/lib/
+
 # === JAVA DEPENDENCY ADDITIONS END HERE ===
 
 # Spacy model

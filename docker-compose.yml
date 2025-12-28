@@ -75,6 +75,7 @@ services:
     ports:
       - "8081:8081"
     volumes:
+      - ./jars:/opt/flink/lib/custom
       - ./flink-jobs:/opt/flink/jobs
       - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
     environment:
@@ -94,13 +95,15 @@ services:
       - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
     environment:
         - JOB_MANAGER_RPC_ADDRESS=jobmanager
+        - FLINK_ENV_PYTHONPATH=/opt/project:/opt/flink/lib/*
     command: [ "/opt/flink/bin/taskmanager.sh", "start-foreground" ]
+
 
  # =========================
  # AIRFLOW (The Producer)
  # =========================
 
-  airflow: 
+  airflow:
     image: apache/airflow:2.7.1
     container_name: finalyearproject-airflow-1
     ports:
@@ -108,6 +111,7 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./gdelt_data:/opt/airflow/gdelt_data
+      - ./flink-jobs:/opt/airflow/flink-jobs
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:password@db:5432/gdelt_db

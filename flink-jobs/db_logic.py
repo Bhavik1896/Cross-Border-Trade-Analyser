@@ -1,7 +1,9 @@
 import pandas as pd
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, text, PrimaryKeyConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.dialects.postgresql import insert
 from datetime import datetime, timedelta
+from sqlalchemy import Column, Integer, String, Float, DateTime, PrimaryKeyConstraint
 import time
 import os
 import pycountry
@@ -13,34 +15,60 @@ SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 
+
+
+
+# --- 1. DATABASE TIME CONFIGURATION ---
+
+def utc_now():
+    import datetime
+    return datetime.datetime.utcnow()
+
+
 # --- 2. DATABASE SCHEMA ---
 class NewsEvent(Base):
-    """Stores every raw news article (for history)."""
     __tablename__ = "news_history"
-    id = Column(Integer, autoincrement=True, index=True)
+
+    id = Column(Integer, autoincrement=True)
+    timestamp = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: __import__("datetime").datetime.utcnow()
+    )
+
     country_code = Column(String, index=True)
     sector = Column(String, index=True)
     tone = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow)
     headline = Column(String)
+
     __table_args__ = (
-        PrimaryKeyConstraint('id', 'timestamp'),
+        PrimaryKeyConstraint("timestamp", "id"),
     )
+
+
 
 
 class CountryScore(Base):
     """Stores the latest calculated IFI score (for the Flask API)."""
     __tablename__ = "latest_scores"
-    id = Column(Integer, primary_key=True, index=True)
-    country_code = Column(String, unique=True)
-    sector = Column(String)
+
+    id = Column(Integer, index=True)
+    country_code = Column(String, nullable=False)
+    sector = Column(String, nullable=False)
     ifi_score = Column(Float)
     verdict = Column(String)
     last_updated = Column(DateTime, default=datetime.utcnow)
 
+    __table_args__ = (
+        PrimaryKeyConstraint("country_code", "sector"),
+    )
+
+
 
 # --- 3. STATEFUL LOGIC (Read/Write) ---
+print("DEBUG: save_and_get_trends() called")
 def save_and_get_trends(country, sector, tone, headline):
+    from datetime import datetime, timedelta
     """Saves event and calculates 30-day trend from TimescaleDB."""
     session = SessionLocal()
     try:
@@ -81,25 +109,39 @@ def save_and_get_trends(country, sector, tone, headline):
     finally:
         session.close()
 
+print("DEBUG: update_final_score() called")
+from sqlalchemy.dialects.postgresql import insert
 
-def update_final_score(country, sector, score, verdict):
-    """Updates the final score table for the Flask API."""
+def update_final_score(country_code, sector, score, verdict):
     session = SessionLocal()
     try:
-        existing = session.query(CountryScore).filter_by(country_code=country, sector=sector).first()
-        if existing:
-            existing.ifi_score = score
-            existing.verdict = verdict
-            existing.last_updated = datetime.utcnow()
-        else:
-            new_score = CountryScore(country_code=country, sector=sector, ifi_score=score, verdict=verdict)
-            session.add(new_score)
-        session.commit()  # <--- COMMIT 2: Save the final score
+        stmt = insert(CountryScore).values(
+            country_code=country_code,
+            sector=sector,
+            ifi_score=score,
+            verdict=verdict,
+            last_updated=datetime.utcnow()
+        ).on_conflict_do_update(
+            index_elements=["country_code", "sector"],
+            set_={
+                "ifi_score": score,
+                "verdict": verdict,
+                "last_updated": datetime.utcnow()
+            }
+        )
+
+        session.execute(stmt)
+        session.commit()
+
     except Exception as e:
-        print(f"⚠️ Dashboard Update Failed: {e}")
         session.rollback()
+        print(f"⚠️ Failed to update latest_scores: {e}")
+
     finally:
         session.close()
+
+
+
 
 
 # --- 4. ROBUST INITIALIZATION ---
