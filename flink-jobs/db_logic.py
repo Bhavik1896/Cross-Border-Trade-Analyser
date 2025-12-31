@@ -29,66 +29,67 @@ def utc_now():
 class NewsEvent(Base):
     __tablename__ = "news_history"
 
-    id = Column(Integer, autoincrement=True)
-    timestamp = Column(
-        DateTime,
-        nullable=False,
-        default=lambda: __import__("datetime").datetime.utcnow()
-    )
+    timestamp = Column(DateTime,nullable=False,default=lambda: __import__("datetime").datetime.utcnow())
 
     country_code = Column(String, index=True)
+    state = Column(String, index=True, nullable=True)
     sector = Column(String, index=True)
     tone = Column(Float)
     headline = Column(String)
+    source_url = Column(String)
 
     __table_args__ = (
-        PrimaryKeyConstraint("timestamp", "id"),
+        PrimaryKeyConstraint("timestamp", "country_code", "state", "sector"),
     )
-
 
 
 
 class CountryScore(Base):
-    """Stores the latest calculated IFI score (for the Flask API)."""
     __tablename__ = "latest_scores"
 
-    id = Column(Integer, index=True)
     country_code = Column(String, nullable=False)
+    state = Column(String, nullable=True)
     sector = Column(String, nullable=False)
+
     ifi_score = Column(Float)
     verdict = Column(String)
     last_updated = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        PrimaryKeyConstraint("country_code", "sector"),
+        PrimaryKeyConstraint("country_code", "state", "sector"),
     )
-
-
 
 # --- 3. STATEFUL LOGIC (Read/Write) ---
 print("DEBUG: save_and_get_trends() called")
-def save_and_get_trends(country, sector, tone, headline):
+def save_and_get_trends(country, sector, tone, headline, state=None, news_url = None):
     from datetime import datetime, timedelta
     """Saves event and calculates 30-day trend from TimescaleDB."""
     session = SessionLocal()
     try:
-        # 1. Save New Event
-        new_event = NewsEvent(country_code=country, sector=sector, tone=tone, headline=headline[:250])
+        new_event = new_event = NewsEvent(country_code=country,state=state,sector=sector,tone=tone,headline=headline[:250],source_url=news_url)
         session.add(new_event)
-        session.commit()  # <--- COMMIT 1: Save the new data point
+        session.commit()
 
-        # 2. Query History (TimescaleDB SQL - CORRECTED QUERY)
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         query = text("""
-                     SELECT tone, "timestamp" -- NOTE: "timestamp" is case sensitive in Postgres
+                     SELECT tone, "timestamp"
                      FROM news_history
                      WHERE country_code = :c
                        AND sector = :s
+                       AND (:state IS NULL OR state = :state)
                        AND "timestamp" >= :d
                      """)
-        # We must use engine for read_sql
-        df = pd.read_sql(query, engine, params={"c": country, "s": sector, "d": thirty_days_ago})
 
+        df = pd.read_sql(
+            query,
+            engine,
+            params={
+                "c": country,
+                "s": sector,
+                "state": state,
+                "d": thirty_days_ago
+            }
+        )
         if df.empty:
             return tone, tone, 0.0
 
@@ -103,7 +104,7 @@ def save_and_get_trends(country, sector, tone, headline):
         return tone_7d, tone_30d, float(real_trend)
 
     except Exception as e:
-        print(f"⚠️ DB Error in Save/Query: {e}. ROLLING BACK.")
+        print(f"DB Error in Save/Query: {e}. ROLLING BACK.")
         session.rollback()
         return tone, tone, 0.0
     finally:
@@ -112,17 +113,18 @@ def save_and_get_trends(country, sector, tone, headline):
 print("DEBUG: update_final_score() called")
 from sqlalchemy.dialects.postgresql import insert
 
-def update_final_score(country_code, sector, score, verdict):
+def update_final_score(country_code, sector, score, verdict, state=None):
     session = SessionLocal()
     try:
         stmt = insert(CountryScore).values(
             country_code=country_code,
+            state = state if state else "ALL",
             sector=sector,
             ifi_score=score,
             verdict=verdict,
             last_updated=datetime.utcnow()
         ).on_conflict_do_update(
-            index_elements=["country_code", "sector"],
+            index_elements=["country_code", "state", "sector"],
             set_={
                 "ifi_score": score,
                 "verdict": verdict,
@@ -132,24 +134,19 @@ def update_final_score(country_code, sector, score, verdict):
 
         session.execute(stmt)
         session.commit()
-
     except Exception as e:
         session.rollback()
-        print(f"⚠️ Failed to update latest_scores: {e}")
-
+        print(f"Failed to update latest_scores: {e}")
     finally:
         session.close()
 
 
 
-
-
-# --- 4. ROBUST INITIALIZATION ---
+# --- 4. INITIALIZATION ---
 def initialize_db(max_retries=10, delay=5):
-    """Retries the database connection and initialization until success."""
     for i in range(max_retries):
         try:
-            print(f"⏳ Attempting DB initialization (Retry {i + 1}/{max_retries})...")
+            print(f"Attempting DB initialization (Retry {i + 1}/{max_retries})...")
 
             # 1. Create tables and run Timescale init
             Base.metadata.create_all(bind=engine)
@@ -161,16 +158,15 @@ def initialize_db(max_retries=10, delay=5):
             ))
             conn.commit()
             conn.close()
-            print("✅ TimescaleDB Hypertable Activated & Tables Ready.")
+            print("TimescaleDB Hypertable Activated & Tables Ready.")
             return
 
         except Exception as e:
-            print(f"⚠️ DB Startup Failed: {e}. Retrying in {delay}s...")
+            print(f"DB Startup Failed: {e}. Retrying in {delay}s...")
             time.sleep(delay)
 
-    print("❌ CRITICAL: Failed to initialize database after all retries. Shutting down.")
+    print("CRITICAL: Failed to initialize database after all retries. Shutting down.")
     exit(1)
 
 
-# --- RUN INITIALIZATION AT GLOBAL SCOPE ---
 initialize_db()

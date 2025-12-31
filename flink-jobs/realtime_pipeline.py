@@ -14,26 +14,6 @@ from ml_logic import get_india_business_verdict
 TEMP_OUTPUT_PATH = "file:///opt/flink/temp_output/gdelt_events"
 
 
-# ====================================================
-# Kafka Message Processor
-# ====================================================
-
-# def process_message(value: str) -> List[Tuple]:
-#     try:
-#         event_data = json.loads(value)
-#         headline = event_data.get("raw_data", "")
-#
-#         if headline and len(headline) > 10:
-#             # MUST return List[Tuple]
-#             return get_india_business_verdict(headline)
-#
-#         return []
-#
-#     except Exception as e:
-#         print(f"Processing error: {e}")
-#         return []
-
-
 def process_message(value: str):
     try:
         event_data = json.loads(value)
@@ -49,15 +29,11 @@ def process_message(value: str):
         traceback.print_exc()
         raise
 
-
-
-
-
 # ====================================================
-# Main Job
+# Execution Of  Job
 # ====================================================
 
-def main():
+def execution():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(2)
 
@@ -83,7 +59,7 @@ def main():
     # ====================================================
 
     OUTPUT_SCHEMA = Types.ROW([
-        Types.STRING(),  # ts
+        Types.STRING(),  # timestamp
         Types.STRING(),  # headline
         Types.STRING(),  # verdict
         Types.FLOAT(),   # score
@@ -118,7 +94,7 @@ def main():
     sink_builder.with_rolling_policy(
         DefaultRollingPolicy.default_rolling_policy(
             part_size=1024 * 1024 * 10,   # 10 MB
-            rollover_interval=60000,      # 1 minute
+            rollover_interval=60000,      # Running for 1 minute
             inactivity_interval=60000
         )
     )
@@ -145,6 +121,4 @@ def main():
 
     env.execute("Realtime GDELT PyFlink Pipeline (StreamingFileSink)")
 
-
-if __name__ == "__main__":
-    main()
+execution()
