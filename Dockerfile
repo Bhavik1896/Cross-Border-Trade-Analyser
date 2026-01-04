@@ -54,7 +54,6 @@ RUN pip3 install --no-cache-dir \
     transformers \
     spacy \
     pycountry \
-    geopy \
     xgboost \
     scikit-learn \
     kafka-python \

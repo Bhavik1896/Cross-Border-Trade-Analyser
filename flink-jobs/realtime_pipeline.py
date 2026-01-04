@@ -17,17 +17,26 @@ TEMP_OUTPUT_PATH = "file:///opt/flink/temp_output/gdelt_events"
 def process_message(value: str):
     try:
         event_data = json.loads(value)
-        headline = event_data.get("raw_data", "")
 
-        if headline and len(headline) > 10:
-            return get_india_business_verdict(headline)
+        # Build richer NLP text
+        text = " ".join(filter(None, [
+            event_data.get("themes"),
+            event_data.get("locations"),
+            event_data.get("persons")
+        ]))
+
+        news_url = event_data.get("url")
+
+        if text and len(text) > 10:
+            return get_india_business_verdict(text, news_url)
 
         return []
 
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
-        raise
+        return []
+
 
 # ====================================================
 # Execution Of  Job
@@ -65,8 +74,12 @@ def execution():
         Types.FLOAT(),   # score
         Types.STRING(),  # sector
         Types.STRING(),  # target_country
-        Types.STRING()   # partner_name
+        Types.STRING(),   # partner_name
+        Types.STRING(),  # state
+        Types.STRING()  # news_url
     ])
+
+
 
     processed_stream = stream.flat_map(
         process_message,

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import Column, Integer, String, Float, DateTime, PrimaryKeyConstraint
 import time
 import os
+import geo_resolver
 import pycountry
 
 # --- 1. DATABASE CONFIGURATION ---
@@ -29,17 +30,30 @@ def utc_now():
 class NewsEvent(Base):
     __tablename__ = "news_history"
 
-    timestamp = Column(DateTime,nullable=False,default=lambda: __import__("datetime").datetime.utcnow())
+    timestamp = Column(
+        DateTime,
+        nullable=False,
+        default=lambda: datetime.utcnow()
+    )
 
     country_code = Column(String, index=True)
+    country_name = Column(String, index=True)
+    role = Column(String, index=True)   # PRIMARY / ACTOR / AFFECTED
+
     state = Column(String, index=True, nullable=True)
     sector = Column(String, index=True)
+
     tone = Column(Float)
     headline = Column(String)
     source_url = Column(String)
 
     __table_args__ = (
-        PrimaryKeyConstraint("timestamp", "country_code", "state", "sector"),
+        PrimaryKeyConstraint(
+            "timestamp",
+            "country_code",
+            "sector",
+            "role"
+        ),
     )
 
 
@@ -48,6 +62,8 @@ class CountryScore(Base):
     __tablename__ = "latest_scores"
 
     country_code = Column(String, nullable=False)
+    country_name = Column(String, nullable=False)
+
     state = Column(String, nullable=True)
     sector = Column(String, nullable=False)
 
@@ -59,6 +75,32 @@ class CountryScore(Base):
         PrimaryKeyConstraint("country_code", "state", "sector"),
     )
 
+def save_relation(country_code, role, sector, headline, news_url):
+    session = SessionLocal()
+    try:
+        resolved = geo_resolver.resolve_region_and_country(country_code)
+
+        event = NewsEvent(
+            country_code=country_code,
+            country_name=resolved["country_name"],
+            role=role,
+            state="ALL",
+            sector=sector,
+            tone=None,
+            headline=headline[:250],
+            source_url=news_url
+        )
+
+        session.add(event)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Relation insert failed: {e}")
+    finally:
+        session.close()
+
+
+
 # --- 3. STATEFUL LOGIC (Read/Write) ---
 print("DEBUG: save_and_get_trends() called")
 def save_and_get_trends(country, sector, tone, headline, state=None, news_url = None):
@@ -66,7 +108,19 @@ def save_and_get_trends(country, sector, tone, headline, state=None, news_url = 
     """Saves event and calculates 30-day trend from TimescaleDB."""
     session = SessionLocal()
     try:
-        new_event = new_event = NewsEvent(country_code=country,state=state,sector=sector,tone=tone,headline=headline[:250],source_url=news_url)
+        resolved = geo_resolver.resolve_region_and_country(country)
+
+        new_event = NewsEvent(
+            country_code=country,
+            country_name=resolved["country_name"],
+            role="PRIMARY",
+            state=state,
+            sector=sector,
+            tone=tone,
+            headline=headline[:250],
+            source_url=news_url
+        )
+
         session.add(new_event)
         session.commit()
 
@@ -76,6 +130,8 @@ def save_and_get_trends(country, sector, tone, headline, state=None, news_url = 
                      FROM news_history
                      WHERE country_code = :c
                        AND sector = :s
+                       AND role = 'PRIMARY'
+
                        AND (:state IS NULL OR state = :state)
                        AND "timestamp" >= :d
                      """)
@@ -116,9 +172,12 @@ from sqlalchemy.dialects.postgresql import insert
 def update_final_score(country_code, sector, score, verdict, state=None):
     session = SessionLocal()
     try:
+        resolved = geo_resolver.resolve_region_and_country(country_code)
+
         stmt = insert(CountryScore).values(
             country_code=country_code,
-            state = state if state else "ALL",
+            country_name=resolved["country_name"],  # ✅ FIX
+            state=state if state else "ALL",
             sector=sector,
             ifi_score=score,
             verdict=verdict,
@@ -139,6 +198,7 @@ def update_final_score(country_code, sector, score, verdict, state=None):
         print(f"Failed to update latest_scores: {e}")
     finally:
         session.close()
+
 
 
 

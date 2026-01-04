@@ -139,21 +139,19 @@ services:
     command: python /opt/project/app.py
 
 
-
-#  grafana:
-#    image: grafana/grafana:10.2.3
-#    container_name: finalyearproject-grafana
-#    ports:
-#      - "3000:3000"
-#    environment:
-#      - GF_SECURITY_ADMIN_USER=admin
-#      - GF_SECURITY_ADMIN_PASSWORD=admin
-#    volumes:
-#      - grafana_data:/var/lib/grafana
-#    depends_on:
-#      - db
-
-
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: finalyearproject-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - db
 
 volumes:
   timescale_data:
+  grafana_data:

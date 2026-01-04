@@ -80,7 +80,12 @@ def fetch_gdelt_and_push_to_kafka():
                 "locations": cols[9],
                 "persons": cols[11],
                 "tone": cols[15],
-                "raw_data": cols[4] + " " + cols[7]
+                "raw_data": " ".join([
+                    cols[7],   # themes
+                    cols[9],   # locations (CRITICAL)
+                    cols[11],  # persons
+                ])
+
             }
 
             producer.send(KAFKA_TOPIC, value=record)
