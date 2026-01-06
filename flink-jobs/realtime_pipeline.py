@@ -44,7 +44,7 @@ def process_message(value: str):
 
 def execution():
     env = StreamExecutionEnvironment.get_execution_environment()
-    env.set_parallelism(2)
+    env.set_parallelism(3)
 
     # ====================================================
     # Kafka Source

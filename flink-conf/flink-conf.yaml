@@ -1,8 +1,9 @@
 blob.server.port: 6124
-taskmanager.memory.process.size: 8096m
+taskmanager.memory.process.size: 10096m
+rest.flamegraph.enabled: true
 pipeline.jars: file:///opt/flink/lib/flink-connector-jdbc-3.3.0-1.20.jar;file:///opt/flink/lib/postgresql-42.7.3.jar
-parallelism.default: 2
+parallelism.default: 3
 jobmanager.rpc.address: jobmanager
-taskmanager.numberOfTaskSlots: 4
+taskmanager.numberOfTaskSlots: 3
 jobmanager.memory.process.size: 4048m
 query.server.port: 6125

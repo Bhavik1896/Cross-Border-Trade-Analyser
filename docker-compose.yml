@@ -4,7 +4,6 @@ services:
   # =========================
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
-    platform: linux/amd64
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_SERVER_ID: 1
@@ -16,7 +15,6 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
-    platform: linux/amd64
     depends_on:
      - zookeeper
     ports:
@@ -51,6 +49,7 @@ services:
 
   db: 
     image: timescale/timescaledb:latest-pg15
+    platform: linux/arm64
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -59,7 +58,7 @@ services:
       - "5432:5432"
     volumes:
       - timescale_data:/var/lib/postgresql/data
-    healthcheck: 
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user"]
       interval: 5s
       timeout: 5s
