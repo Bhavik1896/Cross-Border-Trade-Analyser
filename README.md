@@ -10,18 +10,28 @@ The entire pipeline runs locally using containerized services and mirrors the ar
 
 ## Architecture
 
+```text
+[Orchestration]
+Airflow (scheduled ingestion & job control)
+    ↓
+
+[Ingestion]
 News Sources
-↓
+    ↓
 Kafka (event ingestion & buffering)
-↓
-Flink (real-time stream processing)
-↓
-TimescaleDB (time-series storage)
-↓
-Grafana (SQL-based analytics & visualization)
+    ↓
 
-Each component runs in an isolated Docker container and communicates over a private Docker network.
+[Processing]
+Flink (PyFlink streaming jobs)
+    ↓
 
+[Storage]
+TimescaleDB (hypertables)
+    ↓
+
+[Analytics]
+Grafana (SQL dashboards)
+```
 ---
 
 ## Key Features
