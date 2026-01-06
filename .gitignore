@@ -3,6 +3,7 @@ gdelt_data/
 *.xls;xlsx;csv
 
 .DS_Store
+.gdelt_full_backup.sql
 
 .idea/
 
