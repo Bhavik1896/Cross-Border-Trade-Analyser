@@ -1,9 +1,11 @@
 gdelt_data/
 *.json
 *.xls;xlsx;csv
+*.sql
+*.db
+*_backup.*
 
 .DS_Store
-.gdelt_full_backup.sql
 
 .idea/
 
