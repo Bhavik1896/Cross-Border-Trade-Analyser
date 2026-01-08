@@ -34,7 +34,18 @@ SECTOR_GROUPS = {
     "Agriculture": ["FOOD", "WATER", "AGRICULTURE", "FARM", "CROP", "WHEAT"],
     "Public Sector": ["POL", "GOV", "STATE", "PUBLIC", "LAW", "ELECTION"],
     "Infrastructure": ["ROAD", "RAIL", "URBAN", "INFRA", "BUILDING", "CONSTRUCTION"],
+    "Education": ["EDU", "SCHOOL", "UNIV", "COLLEGE", "STUDENT", "TEACHER", "ACADEMIC", "DEGREE", "LEARNING", "CAMPUS","RESEARCH"],
+    "Transportation": ["TRANS", "LOGISTICS", "AVIATION", "AIRLINE", "CARGO", "FREIGHT", "SHIPPING", "PORT", "VEHICLE","TRANSIT"],
+    "Retail & Consumer": ["RETAIL", "SHOP", "CONSUMER", "COMMERCE", "MALL", "FASHION", "LUXURY", "GOODS", "SALES","BRAND"],
+    "Media & Entertainment": ["MEDIA", "NEWS", "PRESS", "FILM", "MOVIE", "MUSIC", "ENTERTAINMENT", "STREAMING","GAMING", "SPORT", "ARTS"],
+    "Real Estate": ["HOUSING", "PROPERTY", "REALESTATE", "RENT", "ESTATE", "COMMERCIAL", "RESIDENTIAL", "MORTGAGE","TENANT"],
+    "Environment": ["CLIMATE", "POLLUTION", "CARBON", "EMISSION", "WASTE", "SUSTAINABILITY", "CONSERVATION", "DISASTER","ECO", "WARMING"],
+    "Labor & Employment": ["LABOR", "JOB", "WORKFORCE", "UNEMPLOYMENT", "UNION", "STRIKE", "WAGE", "EMPLOYEE", "HIRING","HR"],
+    "Legal & Justice": ["LAW", "COURT", "LEGAL", "JUDGE", "CRIME", "POLICE", "PRISON", "JUSTICE", "LAWSUIT", "TRIAL","RIGHTS"],
+    "Science & Space": ["SCIENCE", "SPACE", "NASA", "ASTRONOMY", "PHYSICS", "CHEMISTRY", "BIOLOGY", "SATELLITE","LAUNCH", "EXPLORATION"],
+    "Tourism & Hospitality": ["TOURISM", "TRAVEL", "HOTEL", "HOSPITALITY", "RESORT", "VACATION", "TRIP", "TOURIST","RESTAURANT", "VISA"]
 }
+
 LEADER_COUNTRY_MAP = {
     "biden": "US",
     "joe biden": "US",

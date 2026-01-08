@@ -50,6 +50,7 @@ services:
   db: 
     image: timescale/timescaledb:latest-pg15
     platform: linux/arm64
+    shm_size: '2gb'
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
@@ -76,7 +77,7 @@ services:
     volumes:
       - ./jars:/opt/flink/lib/custom
       - ./flink-jobs:/opt/flink/jobs
-      - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+      - ./conf_files/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
     environment:
         - JOB_MANAGER_RPC_ADDRESS=jobmanager
     command: ["/opt/flink/bin/jobmanager.sh", "start-foreground"]
@@ -91,7 +92,7 @@ services:
       - jobmanager
     volumes:
       - ./flink-jobs:/opt/flink/jobs
-      - ./flink-conf/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+      - ./conf_files/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
     environment:
         - JOB_MANAGER_RPC_ADDRESS=jobmanager
         - FLINK_ENV_PYTHONPATH=/opt/project:/opt/flink/lib/*
@@ -150,6 +151,47 @@ services:
       - grafana_data:/var/lib/grafana
     depends_on:
       - db
+
+  cadvisor:
+    # Do NOT use :latest. It is broken. Use a specific recent version.
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    platform: linux/aarch64
+    container_name: cadvisor
+    # 'privileged' allows cAdvisor to read the container names correctly
+    privileged: true
+    ports:
+      - "8082:8080"
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      # Explicitly mount the socket so it can find names
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./conf_files/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
 
 volumes:
   timescale_data:

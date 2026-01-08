@@ -5,5 +5,6 @@ pipeline.jars: file:///opt/flink/lib/flink-connector-jdbc-3.3.0-1.20.jar;file://
 parallelism.default: 3
 jobmanager.rpc.address: jobmanager
 taskmanager.numberOfTaskSlots: 3
+rest.profiling.enabled: true
 jobmanager.memory.process.size: 4048m
 query.server.port: 6125
