@@ -116,7 +116,8 @@ def execution():
         OutputFileConfig.builder().build()
     )
 
-    string_stream.add_sink(sink_builder.build())
+    string_stream.add_sink(sink_builder.build())\
+    .name("Timescale DB Sink")
 
     # ====================================================
     # Required JARs

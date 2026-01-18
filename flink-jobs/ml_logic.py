@@ -232,8 +232,8 @@ def get_india_business_verdict(text: str, news_url: str | None = None):
         score = float(ifi_model.predict(input_df)[0])
 
         verdict = (
-            "YES" if score > 0.05 else
-            "NO" if score < -0.05 else
+            "YES" if score > 0.10 else
+            "NO" if score < 0.05 else
             "MAYBE"
         )
 

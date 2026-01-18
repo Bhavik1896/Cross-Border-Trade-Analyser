@@ -14,7 +14,7 @@ sleep 10
     --if-not-exists \
     --topic "$TOPIC_NAME" \
     --bootstrap-server "$KAFKA_BROKERS" \
-    --partitions 1 \
+    --partitions 2 \
     --replication-factor 1
 
 echo "Kafka topic '$TOPIC_NAME' created successfully!"
